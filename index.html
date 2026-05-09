@@ -34,9 +34,18 @@ button{font:inherit;font-weight:900;border:0;border-radius:16px;padding:11px 16p
 .kp-eval-desktop-only{display:block}.kp-eval-mobile-only{display:none}
 .kp-eval-table th,.kp-eval-table td{border:1px solid #d9eadf;padding:6px;text-align:center}
 .kp-eval-table th{background:#eef8f2;color:#2a8b54;font-weight:800}
-.kp-eval-month-1{background:#eef6ff}.kp-eval-month-2{background:#fff8dd}.kp-eval-month-3{background:#eaffef}
+.kp-eval-month-1{background:#dff0ff}.kp-eval-month-2{background:#fff0d6}.kp-eval-month-3{background:#e3f5e6}
 .kp-eval-radio input[disabled]{accent-color:#2a8b54}
-.kp-eval-print-parent{background:white;padding:10px;overflow:auto}
+.kp-eval-print-parent{background:white;padding:10px;overflow:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.kp-eval-print-parent .kp-eval-desktop-only{display:block!important}
+.kp-eval-print-parent .kp-eval-mobile-only,.kp-eval-print-parent .kp-eval-cards{display:none!important}
+.kp-eval-print-parent .kp-eval-table-wrap{display:block!important;overflow:auto!important;border:1px solid #d9eadf!important;border-radius:12px!important}
+.kp-eval-print-parent .kp-eval-table{min-width:1120px;width:100%!important}
+.kp-parent-eval-print-header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;margin:0 0 16px 0;direction:ltr}
+.kp-parent-eval-print-header img{width:74px;height:74px;object-fit:contain;border-radius:50%}
+.kp-parent-eval-print-header div{font-weight:900;font-size:16px;color:#0f4a86;text-align:center}
+.kp-parent-eval-print-header .ar{direction:rtl}
+.detailModal:has(.kp-eval-print-parent){max-width:1180px}
 @media(max-width:900px),(pointer:coarse){.kp-eval-desktop-only{display:none!important}.kp-eval-mobile-only{display:flex!important;flex-direction:column;gap:10px}.kp-eval-card{border:1px solid #d9eadf;border-radius:14px;padding:10px;background:#fff}.kp-eval-card-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:800}.kp-eval-card-num{background:#2a8b54;color:#fff;border-radius:999px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center}.kp-eval-card-domain{background:#e8f9ee;color:#2a8b54;border-radius:999px;padding:4px 8px}.kp-eval-card-skill{flex:1}.kp-eval-card-month{border-radius:12px;padding:8px;margin-top:8px}.kp-eval-card-month-head{font-weight:800;margin-bottom:6px}.kp-eval-card-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.kp-eval-card-opt{display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid #cde9d8;border-radius:10px;padding:8px;background:white;font-size:12px}}
 @media print{.kp-eval-mobile-only{display:none!important}.kp-eval-desktop-only{display:block!important}.kp-eval-print-parent{padding:0}.kp-eval-table{font-size:10px!important}}
 
@@ -527,9 +536,12 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
   // Compute the evaluation period (which months have data) for read-only renders
   var periodLine = '';
   if (savedData) {
-    var monthsHave = (Array.isArray(savedData.submittedMonths) && savedData.submittedMonths.length === 3)
-      ? savedData.submittedMonths
+    var monthsClaimed = (Array.isArray(savedData.submittedMonths) && savedData.submittedMonths.length === 3)
+      ? savedData.submittedMonths.slice()
       : kpEvalComputeEvaluatedMonths(savedData);
+    var monthsActual = kpEvalComputeEvaluatedMonths(savedData);
+    var monthsHave = [false,false,false];
+    for (var mh = 0; mh < 3; mh++) monthsHave[mh] = !!(monthsClaimed[mh] && monthsActual[mh]);
     var monthLabels = [];
     for (var mi = 0; mi < 3; mi++) if (monthsHave[mi]) monthLabels.push(form.months[mi]);
     if (monthLabels.length === 3) periodLine = isAr ? 'كامل الفصل (٣ أشهر)' : 'Full term (3 months)';
@@ -676,9 +688,11 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
   // skill data.
   var submittedMo = [false, false, false];
   if (savedData) {
-    submittedMo = (Array.isArray(savedData.submittedMonths) && savedData.submittedMonths.length === 3)
+    var submittedClaimed = (Array.isArray(savedData.submittedMonths) && savedData.submittedMonths.length === 3)
       ? savedData.submittedMonths.slice()
       : kpEvalComputeEvaluatedMonths(savedData);
+    var submittedActual = kpEvalComputeEvaluatedMonths(savedData);
+    for (var sm = 0; sm < 3; sm++) submittedMo[sm] = !!(submittedClaimed[sm] && submittedActual[sm]);
   }
   // Resolve the evaluator's display name. Prefer the saved `submittedBy`
   // on the record; if rendering a fresh form (no savedData yet), fall back
@@ -697,29 +711,29 @@ function kpEvalBuildFormHTML(form, student, editable, savedData, quarterId, lock
       // submit-date underneath if we have one.
       var dateStr = (savedData && savedData.submittedAt) ? String(savedData.submittedAt).slice(0, 10) : '';
       return '<div><b>' + label + '</b>'
-        + '<div style="border-bottom:1px solid #aaa;min-height:24px;padding:2px 4px;font-weight:700;color:#1a4a82">'
+        + '<div style="border-bottom:1px solid #aaa;min-height:18px;padding:1px 4px;font-weight:700;color:#1a4a82">'
         + escapeHtml(evaluatorName)
         + (dateStr ? '<div style="font-size:9px;font-weight:400;color:#888">' + escapeHtml(dateStr) + '</div>' : '')
         + '</div></div>';
     }
     // Empty — no submission yet for this month
-    return '<div><b>' + label + '</b><div style="border-bottom:1px solid #aaa;height:24px"></div></div>';
+    return '<div><b>' + label + '</b><div style="border-bottom:1px solid #aaa;height:18px"></div></div>';
   }
 
   var footer = ''
-    + '<div style="margin-top:14px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<div style="margin-top:6px;font-size:11px;display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     + '  <div><b>' + (isAr ? 'اسم الطالب' : 'Student name') + ':</b> ' + escapeHtml(stuName) + '</div>'
     + '  <div style="text-align:' + (isAr ? 'left' : 'right') + '"><b>' + (isAr ? 'الفصل' : 'Term') + ':</b> ' + escapeHtml(termLabel) + '</div>'
     + '</div>'
-    + '<div style="margin-top:18px;font-size:12px;color:var(--muted);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
+    + '<div style="margin-top:7px;font-size:10px;color:var(--muted);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
     + teacherSigSlot(0)
     + teacherSigSlot(1)
     + teacherSigSlot(2)
     + '</div>'
-    + '<div style="margin-top:8px;font-size:12px;color:var(--muted);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
-    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-1" style="border-bottom:1px solid #aaa;height:36px"></div></div>'
-    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-2" style="border-bottom:1px solid #aaa;height:36px"></div></div>'
-    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-3" style="border-bottom:1px solid #aaa;height:36px"></div></div>'
+    + '<div style="margin-top:5px;font-size:10px;color:var(--muted);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">'
+    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-1" style="border-bottom:1px solid #aaa;height:24px"></div></div>'
+    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-2" style="border-bottom:1px solid #aaa;height:24px"></div></div>'
+    + '  <div><b>' + (isAr ? 'توقيع الإدارة' : 'Manager signature') + '</b><div id="eval-stamp-3" style="border-bottom:1px solid #aaa;height:24px"></div></div>'
     + '</div>';
 
   return header + table + footer;
@@ -757,7 +771,7 @@ window.renderExactEvaluation = function(e, autoPrint){
   temp.innerHTML = formHtml;
   if ((e.status === 'approved' || e.approvedAt) && e.stampDataUrl) {
     var stampHtml = ''
-      + '<img src="' + e.stampDataUrl + '" alt="stamp" style="height:64px;display:block;margin:0 auto"/>'
+      + '<img src="' + e.stampDataUrl + '" alt="stamp" style="height:38px;display:block;margin:0 auto"/>'
       + '<div style="font-size:10px;color:#666;text-align:center;margin-top:2px">'
       + escapeHtml(e.approvedBy||'') + ' — ' + escapeHtml((e.approvedAt||'').slice(0,10)) + '</div>';
     var months = (Array.isArray(e.evaluatedMonths) && e.evaluatedMonths.length === 3)
@@ -769,7 +783,30 @@ window.renderExactEvaluation = function(e, autoPrint){
       }
     }
   }
-  openDetail('استمارة التقييم', '<div class="kp-eval-print-parent">' + temp.innerHTML + '</div>', autoPrint);
+  try {
+    var cardsForPrint = temp.querySelector('.kp-eval-cards');
+    if (cardsForPrint && cardsForPrint.parentNode) cardsForPrint.parentNode.removeChild(cardsForPrint);
+    if (e && e.skills) {
+      Object.keys(e.skills).forEach(function(rowKey){
+        var vals = e.skills[rowKey] || [];
+        for (var mm=0; mm<3; mm++) {
+          var vv = vals[mm];
+          if (vv === undefined || vv === null || vv === '') continue;
+          var inp = temp.querySelector('table.kp-eval-table input[name="eval-r-' + rowKey + '-' + mm + '"][value="' + Number(vv) + '"]');
+          if (inp) { inp.checked = true; inp.setAttribute('checked','checked'); }
+        }
+      });
+    }
+  } catch(_e){}
+  var oldHeader = temp.querySelector('.kp-eval-header');
+  if (oldHeader && oldHeader.parentNode) oldHeader.parentNode.removeChild(oldHeader);
+  var cleanHeader = ''
+    + '<div class="kp-parent-eval-print-header">'
+    + '  <div>Kids Park Nursery</div>'
+    + '  <img src="' + kpEvalGetHeaderLogo() + '" alt="Kids Park Nursery Logo">'
+    + '  <div class="ar">&#1581;&#1590;&#1575;&#1606;&#1577; &#1581;&#1583;&#1610;&#1602;&#1577; &#1575;&#1604;&#1571;&#1591;&#1601;&#1575;&#1604;</div>'
+    + '</div>';
+  openDetail('\u0627\u0633\u062a\u0645\u0627\u0631\u0629 \u062a\u0642\u064a\u064a\u0645 \u0641\u0635\u0644\u064a\u0629', '<div class="kp-eval-print-parent">' + cleanHeader + temp.innerHTML + '</div>', autoPrint);
 }
 </script>
 
@@ -894,18 +931,86 @@ function renderSummary(){const s=parentStudents[currentStudentIndex];$("childSum
 function switchView(v){document.querySelectorAll(".tabs .tab").forEach(b=>b.classList.toggle("on",b.dataset.view===v));["Profile","Payments","Evaluations","Request"].forEach(n=>$("view"+n).classList.add("hidden"));$("view"+v.charAt(0).toUpperCase()+v.slice(1)).classList.remove("hidden")}
 function kv(label,value,full){return '<div class="kv '+(full?'full':'')+'"><b>'+esc(label)+'</b><span>'+esc(value||"-")+'</span></div>'}
 function docValue(s, keys){
-  for(const k of keys){
-    const v = s && s[k];
-    if(!v) continue;
-    if(typeof v === "string") return v;
-    if(typeof v === "object") return v.url || v.dataUrl || v.downloadURL || v.link || v.name || "";
+  const wanted = (keys||[]).map(k=>String(k).toLowerCase()).filter(Boolean);
+  const seen = new Set();
+  const urlFields = ['url','dataurl','downloadurl','link','href','fileurl','fileurl','storageurl','path','src','base64','content','value'];
+  function clean(v){
+    if(!v) return '';
+    if(typeof v === 'string') {
+      const x=v.trim();
+      if(!x || x===LOGO_SRC) return '';
+      return x;
+    }
+    if(typeof v === 'object'){
+      for(const k of Object.keys(v)){
+        const lk=k.toLowerCase();
+        if(urlFields.includes(lk)){
+          const picked=clean(v[k]);
+          if(picked) return picked;
+        }
+      }
+    }
+    return '';
   }
-  return "";
+  function matches(text){
+    const t=String(text||'').toLowerCase();
+    return wanted.some(w => w && (t===w || t.includes(w)));
+  }
+  function objectIsWanted(obj,path){
+    if(matches(path)) return true;
+    if(!obj || typeof obj !== 'object') return false;
+    return matches(obj.type)||matches(obj.kind)||matches(obj.category)||matches(obj.documentType)||matches(obj.docType)||matches(obj.name)||matches(obj.label)||matches(obj.title);
+  }
+  for(const k of keys){
+    const direct = clean(s && s[k]);
+    if(direct) return direct;
+  }
+  function visit(obj, depth, path, inWantedBranch){
+    if(!obj || depth>6) return '';
+    if(typeof obj === 'string') return inWantedBranch ? clean(obj) : '';
+    if(typeof obj !== 'object' || seen.has(obj)) return '';
+    seen.add(obj);
+    const branchWanted = inWantedBranch || objectIsWanted(obj,path);
+    if(branchWanted){
+      const picked=clean(obj);
+      if(picked) return picked;
+    }
+    if(Array.isArray(obj)){
+      for(const item of obj){
+        const found=visit(item, depth+1, path, branchWanted || objectIsWanted(item,path));
+        if(found) return found;
+      }
+      return '';
+    }
+    for(const key of Object.keys(obj)){
+      const lk=key.toLowerCase();
+      const nextPath=(path?path+'.':'')+lk;
+      const keyWanted = matches(lk) || matches(nextPath);
+      if(keyWanted){
+        const direct=clean(obj[key]);
+        if(direct) return direct;
+        const nested=visit(obj[key], depth+1, nextPath, true);
+        if(nested) return nested;
+      }
+    }
+    for(const key of Object.keys(obj)){
+      const lk=key.toLowerCase();
+      if(/document|documents|attachment|attachments|file|files|docs|uploads|renewal|student|child|parent|father|mother/i.test(lk)){
+        const found=visit(obj[key], depth+1, (path?path+'.':'')+lk, branchWanted);
+        if(found) return found;
+      }
+    }
+    return '';
+  }
+  return visit(s,0,'',false);
 }
 function docCard(label,value){
   if(!value) return '<div class="docCard"><b>'+esc(label)+'</b><span class="docEmpty">غير مرفق</span></div>';
-  const isLink = /^https?:|^data:/i.test(String(value));
-  return '<div class="docCard"><b>'+esc(label)+'</b>'+(isLink?'<a href="'+esc(value)+'" target="_blank" rel="noopener">فتح / عرض الملف</a>':'<span>'+esc(value)+'</span>')+'</div>';
+  const raw = String(value);
+  const isLink = /^https?:|^data:/i.test(raw);
+  const isImg = /^data:image\//i.test(raw) || /\.(png|jpe?g|webp|gif)(?:\?|#|$)/i.test(raw);
+  const preview = isImg ? '<a href="'+esc(raw)+'" target="_blank" rel="noopener"><img src="'+esc(raw)+'" style="max-width:100%;max-height:130px;object-fit:contain;border-radius:10px;border:1px solid #e7f2eb;margin-top:6px"></a>' : '';
+  return '<div class="docCard"><b>'+esc(label)+'</b>'+(isLink?'<a href="'+esc(raw)+'" target="_blank" rel="noopener">فتح / عرض الملف</a>'+preview:'<span>'+esc(raw)+'</span>')+'</div>';
 }
 function renderProfile(){
  const s=parentStudents[currentStudentIndex];
@@ -924,14 +1029,14 @@ function renderProfile(){
   ["الحالة الصحية",studentField(s,"health")],["ملاحظات",studentField(s,"notes")]
  ];
  const docs=[
-  ["صورة الطفل",docValue(s,["photo","studentPhoto","childPhoto","image","profilePhoto","photoUrl"])],
-  ["جواز السفر",docValue(s,["passport","passportFile","childPassport","passportDoc","passportUrl"])],
-  ["الهوية الإماراتية",docValue(s,["emiratesIdDoc","eidDoc","idDoc","emiratesIdFile","idFile","eidFile"])],
-  ["شهادة الميلاد",docValue(s,["birthCertificate","birthCertificateFile","birthCert","birthCertFile"])],
-  ["بطاقة التطعيم",docValue(s,["vaccinationCard","vaccination","vaccineCard","vaccinationFile"])],
-  ["تقرير طبي / حساسية",docValue(s,["medicalReport","medicalFile","healthDocument","allergyReport"])],
-  ["هوية الأب",docValue(s,["fatherId","fatherIdDoc","dadId","fatherEid","dadIdFile"])],
-  ["هوية الأم",docValue(s,["motherId","motherIdDoc","momId","motherEid","momIdFile"])]
+  ["صورة الطفل",docValue(s,["photo","studentPhoto","childPhoto","image","profilePhoto","photoUrl","imgChildPhoto","childImage","studentImage"])],
+  ["جواز السفر",docValue(s,["passport","passportFile","childPassport","passportDoc","passportUrl","imgPassport","passportAttachment","passportImage"])],
+  ["الهوية الإماراتية",docValue(s,["emiratesIdDoc","eidDoc","idDoc","emiratesIdFile","idFile","eidFile","imgEmiratesId","emiratesIdAttachment","eidAttachment"])],
+  ["شهادة الميلاد",docValue(s,["birthCertificate","birthCertificateFile","birthCert","birthCertFile","imgBirthCert","birthAttachment"])],
+  ["بطاقة التطعيم",docValue(s,["vaccinationCard","vaccination","vaccineCard","vaccinationFile","imgVaccination","vaccinationAttachment"])],
+  ["تقرير طبي / حساسية",docValue(s,["medicalReport","medicalFile","healthDocument","allergyReport","medicalAttachment","healthAttachment","imgMedicalReport"])],
+  ["هوية الأب",docValue(s,["fatherId","fatherIdDoc","dadId","fatherEid","dadIdFile","imgDadId","imgFatherId","fatherIdAttachment"])],
+  ["هوية الأم",docValue(s,["motherId","motherIdDoc","momId","motherEid","momIdFile","imgMotherId","imgMomId","motherIdAttachment"])]
  ];
  $("viewProfile").innerHTML=
   '<h3>ملف الطفل</h3><div class="hint">يعرض هذا القسم نفس بيانات ملف الطالب الموجودة في النظام للإطلاع فقط.</div><div class="grid">'+
@@ -957,7 +1062,21 @@ function docHeader(title){return '<div class="docHeader"><img class="docLogo" sr
 function rowsTable(rows){return '<table class="table"><tbody>'+rows.map(r=>'<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1]||"-")+'</td></tr>').join("")+'</tbody></table>'}
 function openDetail(title,html,autoPrint){$("detailTitle").textContent=title;$("printArea").innerHTML=html;$("detailOverlay").classList.remove("hidden");if(autoPrint)setTimeout(printDetail,400)}
 function closeDetail(){$("detailOverlay").classList.add("hidden")}
-function printDetail(){window.print()}
+function printDetail(){
+ const title=($("detailTitle")&&$("detailTitle").textContent)||"Kids Park Nursery";
+ const content=($("printArea")&&$("printArea").innerHTML)||"";
+ if(!content.trim()){ alert("لا توجد بيانات للطباعة"); return; }
+ const html='<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet"><style>@page{size:A4 landscape;margin:5mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Tajawal,Arial,sans-serif;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:12px}.printToolbar{position:fixed;top:0;left:0;right:0;background:#21834f;color:#fff;padding:10px;display:flex;gap:8px;justify-content:center;align-items:center;z-index:9}.printToolbar button{border:0;border-radius:10px;padding:9px 16px;font:inherit;font-weight:900;background:#fff;color:#21834f}.printDoc{max-width:1120px;margin:48px auto 0}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #cfded5;padding:7px;text-align:right;vertical-align:top}.table th{background:#f1fbf5;color:#21834f}.docHeader{text-align:center;border-bottom:2px solid #cde9d8;padding-bottom:12px;margin-bottom:14px}.docLogo{width:82px;height:82px;object-fit:contain;border-radius:50%}.kp-parent-eval-print-header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;margin:0 0 8px 0;direction:ltr}.kp-parent-eval-print-header img{width:60px;height:60px;object-fit:contain;border-radius:50%}.kp-parent-eval-print-header div{font-weight:900;font-size:14px;color:#0f4a86;text-align:center}.kp-parent-eval-print-header .ar{direction:rtl}.kp-eval-print-parent{zoom:.88}.kp-eval-month-1{background:#dff0ff!important}.kp-eval-month-2{background:#fff0d6!important}.kp-eval-month-3{background:#e3f5e6!important}.kp-eval-table thead .kp-eval-month-1{background:#85c5f0!important;color:#063d6a!important}.kp-eval-table thead .kp-eval-month-2{background:#ffc978!important;color:#9a3e00!important}.kp-eval-table thead .kp-eval-month-3{background:#a6dcae!important;color:#14551f!important}.kp-eval-mobile-only,.kp-eval-cards{display:none!important}.kp-eval-desktop-only,.kp-eval-table-wrap{display:block!important;overflow:visible!important;border:0!important}.kp-eval-table{width:100%!important;border-collapse:collapse!important;font-size:7.8px!important;table-layout:fixed!important}.kp-eval-table th,.kp-eval-table td{border:1px solid #777!important;padding:1px 2px!important;line-height:1.08!important}.kp-eval-table input{width:10px!important;height:10px!important;margin:0!important}@media print{.printToolbar{display:none!important}.printDoc{margin:0}.noPrint{display:none!important}body{padding:0}.kp-eval-print-parent{zoom:.88;page-break-inside:avoid;break-inside:avoid}.kp-eval-table-wrap,.kp-eval-table,tr,td,th{page-break-inside:avoid;break-inside:avoid}}</style></head><body><div class="printToolbar"><button onclick="window.print()">طباعة / حفظ PDF</button><button onclick="window.close()">إغلاق</button><span>من خيار الوجهة اختاري حفظ PDF عند الحاجة</span></div><main class="printDoc">'+content+'</main><script>window.addEventListener("load",function(){setTimeout(function(){try{window.print()}catch(e){}},250)});<\/script></body></html>';
+ const w=window.open('', '_blank');
+ if(w){w.document.open();w.document.write(html);w.document.close();return;}
+ const frame=document.createElement('iframe');
+ frame.style.cssText='position:fixed;right:-120vw;bottom:0;width:1px;height:1px;border:0;opacity:0';
+ document.body.appendChild(frame);
+ const fw=frame.contentWindow;
+ fw.document.open();fw.document.write(html);fw.document.close();
+ setTimeout(function(){try{fw.focus();fw.print()}catch(e){}},400);
+ setTimeout(function(){try{frame.remove()}catch(e){}},45000);
+}
 function viewPayment(i,autoPrint){const p=parentPayments[i]||{};renderExactReceipt(p,autoPrint)}
 function valueLabel(v){
  if(v==null||v==="") return "-";
@@ -1036,7 +1155,7 @@ function viewEvaluation(i,autoPrint){const e=parentEvaluations[i]||{};renderExac
 const editFields=[["name","اسم الطالب"],["nameEn","الاسم بالإنجليزية"],["dob","تاريخ الميلاد"],["bpl","مكان الميلاد"],["gen","الجنس"],["nat","الجنسية"],["idNo","رقم الهوية"],["cls","الفصل"],["dad","اسم الأب"],["dph","هاتف الأب"],["dadEmail","إيميل الأب"],["job","عمل الأب"],["mom","اسم الأم"],["mph","هاتف الأم"],["momEmail","إيميل الأم"],["momJob","عمل الأم"],["addr","العنوان"],["emergName","جهة الطوارئ"],["emergRel","صلة القرابة"],["emergMob","هاتف الطوارئ"],["health","الحالة الصحية"],["note","ملاحظات"]];
 function renderRequest(){const s=parentStudents[currentStudentIndex];$("viewRequest").innerHTML='<h3>طلب تعديل البيانات</h3><div class="hint">لن يتم تعديل ملف الطالب مباشرة. سيتم إرسال الطلب للإدارة للمراجعة والاعتماد.</div><div class="requestGrid">'+editFields.map(f=>'<div><label>'+esc(f[1])+'</label><input id="chg_'+f[0]+'" value="'+esc(first(s,[f[0]])||studentField(s,guessGroup(f[0])))+'"></div>').join("")+'</div><label>ملاحظة لشرح سبب التعديل</label><textarea id="requestNote"></textarea><div class="actions"><button class="btn" onclick="submitChangeRequest()">إرسال طلب التعديل</button></div><div class="msg" id="requestMsg"></div>'}
 function guessGroup(k){const m={name:"name",nameEn:"nameEn",dob:"dob",bpl:"birthPlace",gen:"gender",nat:"nationality",idNo:"idNo",cls:"cls",dad:"fatherName",dph:"fatherPhone",dadEmail:"fatherEmail",job:"fatherJob",mom:"motherName",mph:"motherPhone",momEmail:"motherEmail",momJob:"motherJob",addr:"address",emergName:"emergencyName",emergRel:"emergencyRel",emergMob:"emergencyPhone",health:"health",note:"notes"};return m[k]||k}
-async function submitChangeRequest(){const s=parentStudents[currentStudentIndex];const changes={};editFields.forEach(f=>{const key=f[0],label=f[1],newValue=$("chg_"+key).value,oldValue=first(s,[key])||studentField(s,guessGroup(key))||"";if(String(newValue||"").trim()!==String(oldValue||"").trim())changes[key]={label,oldValue,newValue}});const note=$("requestNote").value||"";if(!Object.keys(changes).length&&!note.trim())return msg("requestMsg","لا يوجد أي تغيير لإرساله");const req={id:"req_"+Date.now(),studentId:studentId(s),studentName:studentName(s),parentEmail:currentParentEmail,status:"pending",createdAt:new Date().toISOString(),note,changes};try{await fetch(FB_BASE+"/studentChangeRequests/pending/"+req.id+".json",{method:"PUT",body:JSON.stringify(req)});msg("requestMsg","تم إرسال طلب التعديل للإدارة بنجاح","ok")}catch(e){msg("requestMsg","تعذر إرسال الطلب: "+e.message)}}
+async function submitChangeRequest(){const s=parentStudents[currentStudentIndex];const changes={};editFields.forEach(f=>{const key=f[0],label=f[1],newValue=$("chg_"+key).value,oldValue=first(s,[key])||studentField(s,guessGroup(key))||"";if(String(newValue||"").trim()!==String(oldValue||"").trim())changes[key]={label,field:key,systemField:guessGroup(key),oldValue,newValue}});const note=$("requestNote").value||"";if(!Object.keys(changes).length&&!note.trim())return msg("requestMsg","لا يوجد أي تغيير لإرساله");const req={id:"req_"+Date.now(),type:"studentChangeRequest",studentId:studentId(s),studentName:studentName(s),studentClass:studentField(s,"cls"),parentEmail:currentParentEmail,status:"pending",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),note,changes};try{const res=await fetch(FB_BASE+"/studentChangeRequests/"+req.id+".json",{method:"PUT",body:JSON.stringify(req)});if(!res.ok)throw new Error("HTTP "+res.status);msg("requestMsg","تم إرسال طلب التعديل للإدارة بنجاح","ok")}catch(e){msg("requestMsg","تعذر إرسال الطلب: "+e.message)}}
 </script>
 </body>
 </html>
