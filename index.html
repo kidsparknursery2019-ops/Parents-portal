@@ -1629,3 +1629,220 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){re
   try { if (document.getElementById('viewRequest') && document.getElementById('viewRequest').offsetParent !== null) window.renderRequest(); } catch(_e) {}
 })();
 </script>
+
+<script id="kp-parent-submit-change-button-fix-20260510">
+(function(){
+  if (window.__kpParentSubmitChangeButtonFix20260510) return;
+  window.__kpParentSubmitChangeButtonFix20260510 = true;
+
+  var MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+  var BASE_FIELDS = [
+    ['name','اسم الطالب','name'],
+    ['nameEn','الاسم بالإنجليزية','nameEn'],
+    ['dob','تاريخ الميلاد','dob'],
+    ['bpl','مكان الميلاد','birthPlace'],
+    ['gen','الجنس','gender'],
+    ['nat','الجنسية','nationality'],
+    ['idNo','رقم الهوية','idNo'],
+    ['cls','الفصل','cls'],
+    ['dad','اسم الأب','fatherName'],
+    ['dph','هاتف الأب','fatherPhone'],
+    ['dadEmail','إيميل الأب','fatherEmail'],
+    ['job','عمل الأب','fatherJob'],
+    ['mom','اسم الأم','motherName'],
+    ['mph','هاتف الأم','motherPhone'],
+    ['momEmail','إيميل الأم','motherEmail'],
+    ['momJob','عمل الأم','motherJob'],
+    ['addr','العنوان','address'],
+    ['emergName','جهة الطوارئ','emergencyName'],
+    ['emergRel','صلة القرابة','emergencyRel'],
+    ['emergMob','هاتف الطوارئ','emergencyPhone'],
+    ['health','الحالة الصحية','health'],
+    ['note','ملاحظات','notes']
+  ];
+  var DOC_FIELDS = [
+    ['imgChildPhoto','صورة الطفل'],
+    ['imgPassport','جواز السفر'],
+    ['imgEmiratesId','الهوية الإماراتية'],
+    ['imgBirthCert','شهادة الميلاد'],
+    ['imgVaccination','بطاقة التطعيم'],
+    ['imgMedical','تقرير طبي / حساسية'],
+    ['imgDadId','هوية الأب'],
+    ['imgDadPassport','جواز الأب'],
+    ['imgMomId','هوية الأم'],
+    ['imgMomPassport','جواز الأم'],
+    ['imgResidency','الإقامة'],
+    ['imgGuardianId','هوية ولي الأمر'],
+    ['imgGuardianPass','جواز ولي الأمر']
+  ];
+
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+  function escapeHtml(v){
+    if (typeof esc === 'function') return esc(v);
+    return String(v == null ? '' : v).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function el(id){ return document.getElementById(id); }
+  function getStudentSafe(){
+    try { return (typeof parentStudents !== 'undefined' && parentStudents[currentStudentIndex]) ? parentStudents[currentStudentIndex] : {}; }
+    catch(_e){ return {}; }
+  }
+  function firstValue(obj, keys){
+    obj = obj || {};
+    for (var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if (obj[k] !== undefined && obj[k] !== null && clean(obj[k]) !== '') return obj[k];
+    }
+    return '';
+  }
+  function fieldValue(s, key, group){
+    var value = '';
+    try { if (s && s[key] !== undefined && s[key] !== null) value = s[key]; } catch(_e){}
+    if (clean(value) === '' && group && typeof studentField === 'function') {
+      try { value = studentField(s, group); } catch(_e2){}
+    }
+    if (clean(value) === '') {
+      var aliases = [key];
+      if (key === 'bpl') aliases.push('birthPlace','placeOfBirth');
+      if (key === 'gen') aliases.push('gender','sex');
+      if (key === 'nat') aliases.push('nationality');
+      if (key === 'cls') aliases.push('class','className','studentClass','grade');
+      if (key === 'dad') aliases.push('fatherName','dadName','parentName','guardianName');
+      if (key === 'dph') aliases.push('fatherPhone','dadPhone','dadMobile','dadMob');
+      if (key === 'job') aliases.push('fatherJob','dadJob','fatherWork','dadWork');
+      if (key === 'mom') aliases.push('motherName','momName');
+      if (key === 'mph') aliases.push('motherPhone','momPhone','momMobile','momMob');
+      if (key === 'momJob') aliases.push('motherJob','motherWork','momWork');
+      if (key === 'addr') aliases.push('address','homeAddress','fullAddress');
+      if (key === 'emergMob') aliases.push('emergencyPhone','emergencyMobile','emergencyContactPhone');
+      if (key === 'emergName') aliases.push('emergencyName','emergencyContact','emergencyPerson');
+      if (key === 'emergRel') aliases.push('emergencyRelation');
+      value = firstValue(s, aliases);
+    }
+    return value == null ? '' : value;
+  }
+  function studentIdSafe(s){
+    try { if (typeof studentId === 'function') return clean(studentId(s)); } catch(_e){}
+    return clean(firstValue(s, ['id','studentId','childId','student_id','key','_key']));
+  }
+  function showRequestMsg(text, type){
+    var m = el('requestMsg');
+    if (!m) return;
+    m.textContent = text || '';
+    m.className = 'msg on ' + (type === 'ok' ? 'ok' : 'err');
+    m.style.display = 'block';
+    try { m.scrollIntoView({behavior:'smooth', block:'nearest'}); } catch(_e){}
+  }
+  function setSubmitBusy(isBusy){
+    var btn = el('requestSubmitBtn');
+    if (!btn) return;
+    btn.disabled = !!isBusy;
+    btn.style.opacity = isBusy ? '.72' : '';
+    btn.textContent = isBusy ? 'جاري إرسال الطلب...' : 'إرسال طلب التعديل';
+  }
+  function readFileData(file){
+    return new Promise(function(resolve, reject){
+      if (!file) return resolve(null);
+      if (file.size > MAX_ATTACHMENT_BYTES) return reject(new Error('حجم الملف كبير. الحد الأقصى 5MB لكل مرفق.'));
+      var r = new FileReader();
+      r.onload = function(){ resolve({data:r.result, name:file.name, type:file.type || 'application/octet-stream', size:file.size}); };
+      r.onerror = function(){ reject(new Error('تعذر قراءة الملف: ' + file.name)); };
+      r.readAsDataURL(file);
+    });
+  }
+
+  function buildRenderRequest(){
+    var s = getStudentSafe();
+    var html = '<h3>طلب تعديل البيانات</h3>';
+    html += '<div class="hint">لن يتم تعديل ملف الطالب مباشرة. سيتم إرسال الطلب للإدارة للمراجعة والاعتماد.</div>';
+    html += '<div class="requestGrid">';
+    BASE_FIELDS.forEach(function(f){
+      var key = f[0], label = f[1], group = f[2];
+      html += '<div><label>' + escapeHtml(label) + '</label><input id="req_' + key + '" value="' + escapeHtml(fieldValue(s, key, group)) + '"></div>';
+    });
+    DOC_FIELDS.forEach(function(f){
+      var key = f[0], label = f[1];
+      var current = fieldValue(s, key, key);
+      html += '<div><label>' + escapeHtml(label) + '</label><small style="display:block;color:var(--muted);font-weight:800;margin-bottom:6px">' + (clean(current) ? 'ملف مرفق - اختر ملفاً جديداً للتحديث' : 'لا يوجد ملف حالياً') + '</small><input type="file" id="req_' + key + '" accept="image/*,application/pdf"></div>';
+    });
+    html += '</div>';
+    html += '<label>ملاحظة لشرح سبب التعديل</label><textarea id="requestNote" placeholder="اكتبي سبب التعديل هنا عند الحاجة"></textarea>';
+    html += '<div class="actions"><button id="requestSubmitBtn" class="btn" type="button" onclick="submitChangeRequest()">إرسال طلب التعديل</button></div><div id="requestMsg" class="msg"></div>';
+    var host = el('viewRequest');
+    if (host) host.innerHTML = html;
+  }
+
+  async function buildSubmitChangeRequest(){
+    setSubmitBusy(true);
+    try{
+      var s = getStudentSafe();
+      if (!s || !Object.keys(s).length) throw new Error('لم يتم العثور على بيانات الطالب الحالية. يرجى تسجيل الخروج والدخول مرة أخرى.');
+      var changes = {};
+      BASE_FIELDS.forEach(function(f){
+        var key = f[0], label = f[1], group = f[2];
+        var input = el('req_' + key);
+        if (!input) return;
+        var oldValue = clean(fieldValue(s, key, group));
+        var newValue = clean(input.value);
+        if (newValue !== oldValue) {
+          changes[key] = { label:label, field:key, systemField:group || key, oldValue:oldValue, newValue:newValue };
+        }
+      });
+      for (var i=0;i<DOC_FIELDS.length;i++){
+        var dkey = DOC_FIELDS[i][0], dlabel = DOC_FIELDS[i][1];
+        var inputFile = el('req_' + dkey);
+        if (inputFile && inputFile.files && inputFile.files[0]) {
+          var file = await readFileData(inputFile.files[0]);
+          changes[dkey] = {
+            label:dlabel, field:dkey, systemField:dkey,
+            oldValue:clean(fieldValue(s, dkey, dkey)) ? 'ملف مرفق' : '',
+            newValue:file.name, fileName:file.name, fileType:file.type, fileSize:file.size,
+            fileData:file.data, isAttachment:true
+          };
+        }
+      }
+      var noteBox = el('requestNote');
+      var note = noteBox ? clean(noteBox.value) : '';
+      if (!Object.keys(changes).length && !note) {
+        showRequestMsg('لا يوجد أي تغيير لإرساله.', 'err');
+        return;
+      }
+      if (typeof FB_BASE === 'undefined' || !FB_BASE) throw new Error('Firebase غير مهيأ داخل الصفحة.');
+      var id = 'cr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var req = {
+        id:id,
+        type:'studentChangeRequest',
+        studentId:studentIdSafe(s),
+        studentName:clean((typeof studentName === 'function' ? studentName(s) : '') || fieldValue(s, 'name', 'name') || fieldValue(s, 'nameEn', 'nameEn')),
+        studentClass:clean(fieldValue(s, 'cls', 'cls')),
+        parentEmail:(typeof currentParentEmail !== 'undefined' ? currentParentEmail : ''),
+        parentPhone:clean(fieldValue(s, 'dph', 'fatherPhone') || fieldValue(s, 'mph', 'motherPhone') || fieldValue(s, 'phone', 'phone')),
+        status:'pending',
+        createdAt:new Date().toISOString(),
+        updatedAt:new Date().toISOString(),
+        note:note,
+        changes:changes,
+        source:'parent_portal'
+      };
+      var url = FB_BASE + '/studentChangeRequests/pending/' + encodeURIComponent(id) + '.json';
+      var res = await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(req)});
+      if (!res.ok) throw new Error('فشل حفظ الطلب على Firebase (' + res.status + ').');
+      showRequestMsg('تم إرسال طلب التعديل للإدارة بنجاح.', 'ok');
+    } catch(e) {
+      showRequestMsg('تعذر إرسال الطلب: ' + (e && e.message ? e.message : String(e)), 'err');
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
+
+  window.renderRequest = buildRenderRequest;
+  window.submitChangeRequest = buildSubmitChangeRequest;
+  try { renderRequest = window.renderRequest; } catch(_e) {}
+  try { submitChangeRequest = window.submitChangeRequest; } catch(_e2) {}
+  try {
+    var visibleRequest = el('viewRequest');
+    if (visibleRequest && !visibleRequest.classList.contains('hidden')) window.renderRequest();
+  } catch(_e3) {}
+})();
+</script>
