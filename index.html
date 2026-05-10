@@ -1544,7 +1544,119 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){re
   window.kpApplyOfficialLogo = kpApplyOfficialLogo;
 })();
 </script>
-</body>
+
+<script id="kp-parent-active-student-dedupe-20260510">
+(function(){
+  if (window.__kpParentActiveStudentDedupe20260510) return;
+  window.__kpParentActiveStudentDedupe20260510 = true;
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+  function low(v){ return clean(v).toLowerCase(); }
+  function safeFlatten(x, source){ try { return (typeof flattenRecord === 'function') ? flattenRecord(x, source) : Object.assign({}, x || {}); } catch(_e){ return Object.assign({}, x || {}); } }
+  function safeCollection(obj, source){ try { return (typeof collection === 'function') ? collection(obj, source) : []; } catch(_e){ return []; } }
+  function safeNorm(v){ try { return (typeof norm === 'function') ? norm(v) : low(v); } catch(_e){ return low(v); } }
+  function safeStudentId(s){ try { return clean(typeof studentId === 'function' ? studentId(s) : (s && (s.id || s.studentId || s.childId || s.student_id || s.key || s._key))); } catch(_e){ return clean(s && (s.id || s.studentId || s.childId || s.student_id || s.key || s._key)); } }
+  function safeStudentName(s){ try { return clean(typeof studentName === 'function' ? studentName(s) : (s && (s.name || s.studentName || s.childName || s.fullName))); } catch(_e){ return clean(s && (s.name || s.studentName || s.childName || s.fullName)); } }
+  function nameKey(v){
+    try { if (typeof arabicKey === 'function') return arabicKey(v); } catch(_e){}
+    return low(v).replace(/[\s_\-.,\/\\]+/g,'');
+  }
+  function emailsOf(s){
+    try { if (typeof parentEmails === 'function') return parentEmails(s); } catch(_e){}
+    return [s && s.fatherEmail, s && s.motherEmail, s && s.parentEmail, s && s.guardianEmail, s && s.email].map(safeNorm).filter(Boolean);
+  }
+  function linkedToCurrentParent(s){
+    var email = safeNorm(typeof currentParentEmail !== 'undefined' ? currentParentEmail : '');
+    return !!email && emailsOf(s).indexOf(email) >= 0;
+  }
+  function statusOf(r){
+    return low((r && (r.status || r.state || r.registrationStatus || r.requestStatus || r.decision || r.approvedAction)) || '');
+  }
+  function isRejectedLike(r){
+    var st = statusOf(r);
+    return /reject|rejected|declined|cancelled|canceled|deleted|removed|رفض|مرفوض|ملغي|محذوف/.test(st) || !!(r && (r.deleted === true || r.isDeleted === true || r.archived === true));
+  }
+  function isAcceptedLike(r){
+    var st = statusOf(r);
+    return /accept|accepted|approved|approve|active|enrolled|left|inactive|قبول|مقبول|معتمد|نشط|منسحب|غادر|ترك/.test(st) || !!(r && (r.acceptedAt || r.approvedAt || r.approvedStudentId));
+  }
+  function identityMatch(a,b){
+    var aid = safeStudentId(a), bid = safeStudentId(b);
+    if (aid && bid && aid === bid) return true;
+    var an = nameKey(safeStudentName(a)), bn = nameKey(safeStudentName(b));
+    return !!(an && bn && an === bn);
+  }
+  function officialRecords(){
+    var out = [];
+    try { out = out.concat(safeCollection(db && db.students, 'students')); } catch(_e){}
+    try { out = out.concat(safeCollection(db && db.registrationRequests && db.registrationRequests.accepted, 'registrationRequests_accepted')); } catch(_e){}
+    return out.filter(function(r){ return linkedToCurrentParent(r) && !isRejectedLike(r); });
+  }
+  function bestOfficialFor(row){
+    var base = safeFlatten(row, 'otp');
+    var matches = officialRecords().filter(function(r){ return identityMatch(base, r); });
+    if (!matches.length) return null;
+    matches.sort(function(a,b){
+      var as = String(a._source || '') === 'students' ? 10000 : (isAcceptedLike(a) ? 5000 : 0);
+      var bs = String(b._source || '') === 'students' ? 10000 : (isAcceptedLike(b) ? 5000 : 0);
+      as += Object.keys(a || {}).filter(function(k){ return a[k] != null && a[k] !== ''; }).length;
+      bs += Object.keys(b || {}).filter(function(k){ return b[k] != null && b[k] !== ''; }).length;
+      return bs - as;
+    });
+    return Object.assign({}, base, matches[0]);
+  }
+  function dedupeStudents(list){
+    var seen = {}, out = [];
+    (list || []).forEach(function(raw){
+      var s = bestOfficialFor(raw);
+      if (!s || isRejectedLike(s) || !linkedToCurrentParent(s)) return;
+      var id = safeStudentId(s);
+      var nm = nameKey(safeStudentName(s));
+      var key = id ? ('id:' + id) : ('name:' + nm + '|email:' + safeNorm(typeof currentParentEmail !== 'undefined' ? currentParentEmail : ''));
+      if (!nm && !id) return;
+      if (seen[key]) {
+        var old = seen[key];
+        if (String(s._source || '') === 'students' && String(old._source || '') !== 'students') {
+          out[out.indexOf(old)] = s;
+          seen[key] = s;
+        }
+        return;
+      }
+      seen[key] = s;
+      out.push(s);
+    });
+    return out;
+  }
+  window.kpParentCleanStudentList = function(list){ return dedupeStudents(list); };
+  var oldMatch = window.matchAndEnrichStudent || (typeof matchAndEnrichStudent === 'function' ? matchAndEnrichStudent : null);
+  window.matchAndEnrichStudent = matchAndEnrichStudent = function(otpStudent){
+    var official = bestOfficialFor(otpStudent);
+    if (official) return official;
+    if (oldMatch) {
+      try {
+        var matched = oldMatch(otpStudent);
+        if (matched && !isRejectedLike(matched) && linkedToCurrentParent(matched) && bestOfficialFor(matched)) return matched;
+      } catch(_e) {}
+    }
+    var base = safeFlatten(otpStudent, 'otp');
+    base.__kpDropFromParentPortal = true;
+    return base;
+  };
+  function cleanCurrent(){
+    try {
+      parentStudents = dedupeStudents(parentStudents || []);
+      window.parentStudents = parentStudents;
+      if (typeof currentStudentIndex !== 'undefined' && currentStudentIndex >= parentStudents.length) currentStudentIndex = 0;
+      if (typeof saveParentSession === 'function' && parentStudents.length) saveParentSession();
+    } catch(_e) {}
+  }
+  var oldOpenDashboard = window.openDashboard || (typeof openDashboard === 'function' ? openDashboard : null);
+  if (oldOpenDashboard) window.openDashboard = openDashboard = function(){ cleanCurrent(); return oldOpenDashboard.apply(this, arguments); };
+  var oldRenderTabs = window.renderStudentTabs || (typeof renderStudentTabs === 'function' ? renderStudentTabs : null);
+  if (oldRenderTabs) window.renderStudentTabs = renderStudentTabs = function(){ cleanCurrent(); return oldRenderTabs.apply(this, arguments); };
+  var oldRestore = window.restoreParentSession || (typeof restoreParentSession === 'function' ? restoreParentSession : null);
+  if (oldRestore) window.restoreParentSession = restoreParentSession = async function(){ var ok = await oldRestore.apply(this, arguments); cleanCurrent(); return !!(ok && parentStudents && parentStudents.length); };
+})();
+</script></body>
 </html>
 <script id="kp-parent-security-doc-requests-20260510">
 (function(){
