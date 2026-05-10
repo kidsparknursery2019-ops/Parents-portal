@@ -1529,3 +1529,54 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){re
   submitChangeRequest = window.submitChangeRequest = async function(){ try{ var s = parentStudents[currentStudentIndex]; var changes = {}; BASE_FIELDS.forEach(function(f){ var key=f[0], label=f[1]; var el=document.getElementById('req_'+key); if(!el) return; var nv=clean(el.value); var ov=clean(s && s[key]); if(nv && nv !== ov) changes[key]={label:label, field:key, oldValue:ov, newValue:nv}; }); for (var i=0;i<DOC_FIELDS.length;i++){ var key=DOC_FIELDS[i][0], label=DOC_FIELDS[i][1], input=document.getElementById('req_'+key); if(input && input.files && input.files[0]){ var file = await readFileData(input.files[0]); changes[key] = {label:label, field:key, systemField:key, oldValue:(s && s[key])?'??? ?????':'', newValue:file.name, fileName:file.name, fileType:file.type, fileSize:file.size, fileData:file.data, isAttachment:true}; } } if(!Object.keys(changes).length){ var m0=document.getElementById('requestMsg'); if(m0) m0.textContent = typeof T==='function'?T('?? ???? ??????? ????????.'):'?? ???? ??????? ????????.'; return; } var req = {id:'cr_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), studentId:studentIdSafe(s), studentName:(s && (s.name || s.nameEn)) || '', parentPhone:parentPhone || '', changes:changes, status:'pending', createdAt:new Date().toISOString(), source:'parent_portal'}; var res = await fetch(FB_BASE + '/studentChangeRequests/pending/' + encodeURIComponent(req.id) + '.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(req)}); if(!res.ok) throw new Error('Firebase ' + res.status); var msg=document.getElementById('requestMsg'); if(msg) msg.textContent = typeof T==='function'?T('?? ????? ??? ??????? ??????? ?????.'):'?? ????? ??? ??????? ??????? ?????.'; }catch(e){ var msg=document.getElementById('requestMsg'); if(msg) msg.textContent = e && e.message ? e.message : String(e); } };
 })();
 </script>
+
+<script id="kp-parent-receipt-security-20260510b">
+(function(){
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+  function pick(obj, keys){
+    obj = obj || {};
+    for (var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if (obj[k] !== undefined && obj[k] !== null && clean(obj[k]) !== '') return obj[k];
+    }
+    return '';
+  }
+  function flat(x){ try { return (typeof flattenRecord === 'function') ? flattenRecord(x) : (x || {}); } catch(_e){ return x || {}; } }
+  function sidOf(s){ try { return clean(typeof studentId === 'function' ? studentId(s) : pick(s, ['id','stuId','studentId','childId','student_id'])); } catch(_e){ return clean(pick(s, ['id','stuId','studentId','childId','student_id'])); } }
+  function receiptNo(p){ return clean(pick(p, ['receiptNo','receiptNumber','number','receiptId','id'])); }
+  function trustedLinkValue(p){
+    // Main manager system stores approved payment linkage in stuId.
+    // Do not trust generic id/number/receiptNo as student linkage.
+    return clean(pick(p, ['stuId','linkedStudentId','confirmedStudentId','approvedStudentId']));
+  }
+  function fallbackConfirmedValue(p){
+    // These are accepted only when they do not equal the receipt number,
+    // because old data sometimes used receipt number and student number in confusing ways.
+    return clean(pick(p, ['paymentStudentId','matchedStudentId']));
+  }
+  window.paymentLinkedToStudent = function(p, s){
+    p = flat(p);
+    var sid = sidOf(s);
+    if (!sid) return false;
+    var linked = trustedLinkValue(p);
+    if (linked && linked === sid) return true;
+    var fallback = fallbackConfirmedValue(p);
+    if (fallback && fallback === sid && fallback !== receiptNo(p)) return true;
+    return false;
+  };
+  window.paymentsForStudent = paymentsForStudent = function(){
+    var s = (window.parentStudents || parentStudents || [])[currentStudentIndex];
+    var all = []
+      .concat(typeof collection === 'function' ? collection(db.payments, 'payments') : [])
+      .concat(typeof collection === 'function' ? collection(db.receipts, 'receipts') : [])
+      .concat(typeof collection === 'function' ? collection(db.paymentRecords, 'paymentRecords') : []);
+    var seen = {};
+    return all.filter(function(p){ return window.paymentLinkedToStudent(p, s); }).filter(function(p){
+      var key = receiptNo(p) || JSON.stringify(p);
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    }).sort(function(a,b){ return (typeof paymentSortValue === 'function' ? paymentSortValue(b) - paymentSortValue(a) : 0); });
+  };
+})();
+</script>
